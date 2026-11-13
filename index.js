@@ -99,6 +99,15 @@ function jwtExp(token) {
   }
 }
 
+// สรุปหน้า HTML ที่ตอบกลับมา (หน้า error/บล็อก) ให้อ่านง่ายในบรรทัดเดียว
+function htmlSummary(text) {
+  if (!text || !/^\s*</.test(text)) return (text || '').slice(0, 150);
+  const title = (text.match(/<title[^>]*>([\s\S]*?)<\/title>/i) || [])[1] || '';
+  const body = text.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim();
+  return ('หน้าเว็บ: ' + (title.trim() || '-') + ' | ' + body.slice(0, 200)).trim();
+}
+
 function boHeaders(site, token) {
   const origin = new URL(site.web_url).origin;
   const h = {
@@ -125,7 +134,9 @@ async function login(site, cred) {
   try { data = JSON.parse(text); } catch (e) {}
 
   if (!res.ok) {
-    const why = (data && (data.message || data.error || data.msg)) || text.slice(0, 150) || ('HTTP ' + res.status);
+    const why = (data && (data.message || data.error || data.msg)) || htmlSummary(text) || ('HTTP ' + res.status);
+    log('🔎', site.id, 'login ตอบกลับ', res.status, 'server=' + (res.headers.get('server') || '-'),
+      'cf-ray=' + (res.headers.get('cf-ray') || '-'), 'type=' + (res.headers.get('content-type') || '-'));
     if (res.status === 403) throw new Error('หลังบ้านไม่ให้เข้า (403) — อาจจำกัด IP ต้องให้ทีมหลังบ้านเพิ่ม IP ของ Railway: ' + why);
     throw new Error(`ล็อกอินไม่ผ่าน (${res.status}): ${why}`);
   }
@@ -216,7 +227,7 @@ if (PORT) {
 fetch('https://api.ipify.org?format=json', { signal: AbortSignal.timeout(8000) })
   .then(r => r.json()).then(d => log('🌍 IP ขาออกของบอท:', d.ip)).catch(() => {});
 
-log('🤖 K36 บอทหลังบ้าน v0.1 เริ่มทำงาน');
+log('🤖 K36 บอทหลังบ้าน v0.1.1 เริ่มทำงาน');
 loop();
 setInterval(loop, LOOP_MS);
 
