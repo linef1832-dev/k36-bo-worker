@@ -1,6 +1,6 @@
 {
   "name": "k36-bo-worker",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "K36 บอทหลังบ้าน",
   "main": "index.js",
   "type": "commonjs",

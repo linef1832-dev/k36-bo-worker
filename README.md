@@ -1,48 +1,24 @@
-# K36 บอทหลังบ้าน — v0.2 (รันบน VPS Linux ผ่าน OKProxy)
+# K36 บอทหลังบ้าน — v0.3
 
-ทำงาน: ล็อกอินหลังบ้านทุกเว็บที่ตั้งไว้ใน K36 แล้วรายงานสถานะกลับ
-**วิ่งผ่าน sing-box (OKProxy โหนด SG)** จึงออก IP ที่หลังบ้านอนุญาต
+ทำได้แล้ว: ล็อกอิน + ดึงรายชื่อช่องทาง + ดึงค่าช่องทาง + แก้ช่องทาง (ดึงสด→แก้เฉพาะที่สั่ง→PUT)
+ปลอดภัย: ไม่แตะ merchantinfo/vipids/platform, เช็ก max>=min, save ต้อง confirmed=true, ทุกงานบันทึกใน bo_tasks
 
-## ลำดับติดตั้งบน VPS (ใช้ MobaXterm)
+## อัปเดตบน VPS (ที่รันอยู่แล้ว)
+```
+cd /opt/k36-bo-worker
+curl -fsSL "https://raw.githubusercontent.com/linef1832-dev/k36-bo-worker/main/index.js?t=$(date +%s)" -o index.js
+curl -fsSL "https://raw.githubusercontent.com/linef1832-dev/k36-bo-worker/main/package.json?t=$(date +%s)" -o package.json
+npm install --omit=dev
+sudo systemctl restart k36-bo-worker
+sudo journalctl -u k36-bo-worker -n 20 --no-pager
+```
 
-### ส่วนที่ 1 — ตั้งประตู OKProxy (sing-box)  [โฟลเดอร์ k36-singbox]
-1. ลาก `singbox-config.json` และ `install.sh` เข้าช่องไฟล์ซ้ายของ MobaXterm (ไปไว้ที่ /root)
-2. รัน:
-   ```
-   sudo bash install.sh
-   ```
-   ใส่ UUID ของ K36BOT ตามที่ถาม (ช่อง uuid ในไฟล์ sing-box-runtime.json)
-3. ถ้าขึ้น ✅ และ IP = 217.216.108.107 แปลว่าประตูพร้อม (เปิดที่ 127.0.0.1:1080)
+## คิวงาน (bo_tasks) — รัน SQL ก่อน
+Supabase → SQL Editor → รัน sql/bo_tasks_setup.sql (อยู่ในโปรเจกต์ K36)
 
-### ส่วนที่ 2 — รันบอท  [โฟลเดอร์ k36-bo-worker]
-1. ติดตั้ง Node 20 ถ้ายังไม่มี:
-   ```
-   curl -fsSL https://deb.nodesource.com/setup_20.x | sudo bash -
-   sudo apt-get install -y nodejs
-   ```
-2. อัปโหลดโฟลเดอร์ k36-bo-worker ไปไว้ที่ /opt/k36-bo-worker (ลากทั้งโฟลเดอร์เข้า MobaXterm)
-3. สร้างไฟล์ตั้งค่า `/opt/k36-bo-worker/.env`:
-   ```
-   SUPABASE_URL=https://xxxx.supabase.co
-   SUPABASE_KEY=คีย์ Supabase ของ K36
-   BO_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----"
-   PROXY_URL=http://127.0.0.1:1080
-   ```
-   (BO_PRIVATE_KEY วางทั้งก้อน แทนการขึ้นบรรทัดใหม่ด้วย \n หรือใช้ของจริงหลายบรรทัดในเครื่องหมายคำพูดก็ได้)
-4. ติดตั้ง + ตั้ง service:
-   ```
-   cd /opt/k36-bo-worker
-   npm install --omit=dev
-   sudo bash setup-service.sh
-   ```
-5. ดู log:
-   ```
-   sudo journalctl -u k36-bo-worker -f
-   ```
-   ควรเห็น 🌍 IP = 217.216.108.107 และ ✅ ล็อกอินสำเร็จ
-   การ์ดใน K36 เปลี่ยนเป็น "ล็อกอินได้" ภายใน 1 นาที
-
-## สำคัญ
-- PROXY_URL ใช้สำหรับ "หลังบ้าน" เท่านั้น — การต่อ Supabase ยังออกตรง (ซึ่งถูกต้อง เพราะ Supabase ไม่จำกัด IP)
-- ล็อกอินพลาด → รอ 15 นาทีก่อนลองรหัสเดิมซ้ำ (กันบัญชีโดนล็อก) แก้รหัสใน K36 แล้วลองใหม่ทันที
-- ห้ามใส่รหัส/กุญแจในที่อื่น นอกจากไฟล์ .env (ซึ่ง .gitignore กันไม่ให้ขึ้น git แล้ว)
+## คำสั่งที่บอทรับ
+- `list_channels` — คืนรายชื่อช่องทาง
+- `get_channel` {channel_id} — คืนค่าปัจจุบัน
+- `save_channel` {channel_id, changes} + confirmed=true — บันทึก
+  changes: {status?, maxdailyamt?, maxtotalamt?, minpayoutamt?, maxpayoutamt?,
+            amountsuggest?, suggestamounts?[], types?:{CODE:{enabled?,min?,max?}}}
