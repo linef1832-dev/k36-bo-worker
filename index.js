@@ -9,16 +9,21 @@
 // ============================================================
 const crypto = require('node:crypto');
 const http = require('node:http');
+const { ProxyAgent } = require('undici');
 
 const SB_URL = String(process.env.SUPABASE_URL || '').replace(/\/+$/, '');
 const SB_KEY = process.env.SUPABASE_KEY || '';
 const PRIV_PEM = String(process.env.BO_PRIVATE_KEY || '').replace(/\\n/g, '\n').trim();
+const PROXY_URL = String(process.env.PROXY_URL || '').trim(); // เช่น socks5h://127.0.0.1:1080
 
 const LOOP_MS = 60 * 1000;                 // เช็กทุก 1 นาที
 const RELOGIN_BEFORE_MS = 20 * 60 * 1000;  // ล็อกอินใหม่ก่อน token หมด 20 นาที
 const FAIL_COOLDOWN_MS = 15 * 60 * 1000;   // ล็อกอินพลาด → รอ 15 นาทีก่อนลองรหัสเดิมซ้ำ (กันบัญชีโดนล็อก)
 const HTTP_TIMEOUT_MS = 20 * 1000;
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36';
+
+const proxyAgent = PROXY_URL ? new ProxyAgent(PROXY_URL) : undefined;
+const boFetchOpts = () => proxyAgent ? { dispatcher: proxyAgent } : {};
 
 const sessions = new Map(); // siteId -> { token, exp, cipher, failedAt, failedCipher }
 
@@ -127,7 +132,8 @@ async function login(site, cred) {
     method: 'POST',
     headers: boHeaders(site),
     body: JSON.stringify({ userid: cred.userid, password: hashPassword(cred.password) }),
-    signal: AbortSignal.timeout(HTTP_TIMEOUT_MS)
+    signal: AbortSignal.timeout(HTTP_TIMEOUT_MS),
+    ...boFetchOpts()
   });
   const text = await res.text();
   let data = null;
@@ -227,7 +233,14 @@ if (PORT) {
 fetch('https://api.ipify.org?format=json', { signal: AbortSignal.timeout(8000) })
   .then(r => r.json()).then(d => log('🌍 IP ขาออกของบอท:', d.ip)).catch(() => {});
 
-log('🤖 K36 บอทหลังบ้าน v0.1.1 เริ่มทำงาน');
+if (PROXY_URL) {
+  log('🔌 ใช้ proxy สำหรับหลังบ้าน:', PROXY_URL.replace(/\/\/[^@]*@/, '//***@'));
+  fetch('https://api.ipify.org?format=json', { signal: AbortSignal.timeout(12000), ...boFetchOpts() })
+    .then(r => r.json()).then(d => log('🌍 IP ที่หลังบ้านจะเห็น (ผ่าน proxy):', d.ip)).catch(e => log('⚠️ เช็ก IP ผ่าน proxy ไม่ได้:', e.message));
+} else {
+  log('⚠️ ยังไม่ได้ตั้ง PROXY_URL — บอทจะต่อหลังบ้านตรง ๆ (อาจโดนบล็อก IP)');
+}
+log('🤖 K36 บอทหลังบ้าน v0.2 เริ่มทำงาน');
 loop();
 setInterval(loop, LOOP_MS);
 

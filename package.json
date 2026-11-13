@@ -1,9 +1,10 @@
 {
   "name": "k36-bo-worker",
-  "version": "0.1.0",
-  "description": "K36 บอทหลังบ้าน (Railway)",
+  "version": "0.2.0",
+  "description": "K36 บอทหลังบ้าน",
   "main": "index.js",
   "type": "commonjs",
   "engines": { "node": ">=20" },
-  "scripts": { "start": "node index.js" }
+  "scripts": { "start": "node index.js" },
+  "dependencies": { "undici": "^6.21.0" }
 }
