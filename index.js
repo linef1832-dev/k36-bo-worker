@@ -325,23 +325,31 @@ const K36 = {
     // ประเภทการชำระเงิน
     if (changes.types && typeof changes.types === 'object') {
       const pts = cur.paymenttypesetting || (cur.paymenttypesetting = {});
-      let enabledList = Array.isArray(cur.depositPaymentTypes) ? cur.depositPaymentTypes.slice() : Object.keys(pts);
+      // ประเภทที่ "มีจริง" ในช่องทางนี้เท่านั้น (กัน Invalid depositPaymentTypes)
+      const existing = Object.keys(pts);
+      // รายการที่เปิดอยู่ตอนนี้ — ถ้า depositPaymentTypes เป็น null แปลว่า "เปิดทุกประเภทที่มี"
+      let enabledList = Array.isArray(cur.depositPaymentTypes) ? cur.depositPaymentTypes.slice() : existing.slice();
+      let touchedEnable = false, touchedMinMax = false;
       for (const code of Object.keys(changes.types)) {
         const t = changes.types[code];
-        if (!pts[code]) continue; // ไม่มีประเภทนี้ในช่องทางนี้ → ข้าม (ไม่สร้างใหม่)
-        if (t.min !== undefined) { pts[code].mindepositamt = numStr(t.min); changed.push(code + '.min=' + pts[code].mindepositamt); }
-        if (t.max !== undefined) { pts[code].maxdepositamt = numStr(t.max); changed.push(code + '.max=' + pts[code].maxdepositamt); }
+        if (!pts[code]) continue; // ช่องทางนี้ไม่มีประเภทนี้ → ข้าม (ไม่สร้างใหม่ ไม่ใส่ในลิสต์)
+        if (t.min !== undefined) { pts[code].mindepositamt = numStr(t.min); touchedMinMax = true; changed.push(code + '.min=' + pts[code].mindepositamt); }
+        if (t.max !== undefined) { pts[code].maxdepositamt = numStr(t.max); touchedMinMax = true; changed.push(code + '.max=' + pts[code].maxdepositamt); }
         if (t.enabled !== undefined) {
           const on = !!t.enabled;
           const has = enabledList.includes(code);
-          if (on && !has) { enabledList.push(code); changed.push('เปิด ' + code); }
-          if (!on && has) { enabledList = enabledList.filter(c => c !== code); changed.push('ปิด ' + code); }
+          if (on && !has) { enabledList.push(code); touchedEnable = true; changed.push('เปิด ' + code); }
+          if (!on && has) { enabledList = enabledList.filter(c => c !== code); touchedEnable = true; changed.push('ปิด ' + code); }
         }
-        // เช็กความสมเหตุผล: สูงสุดต้อง >= ขั้นต่ำ
         const mn = Number(pts[code].mindepositamt), mx = Number(pts[code].maxdepositamt);
         if (isFinite(mn) && isFinite(mx) && mx < mn) throw new Error(code + ': ฝากสูงสุดน้อยกว่าขั้นต่ำ');
       }
-      cur.depositPaymentTypes = enabledList;
+      // ตั้ง depositPaymentTypes เฉพาะเมื่อมีการเปิด/ปิดจริง และกรองให้เหลือเฉพาะประเภทที่มีจริง
+      if (touchedEnable) {
+        const clean = enabledList.filter(c => existing.includes(c));
+        cur.depositPaymentTypes = clean.length ? clean : existing.slice();
+      }
+      // ถ้าแก้แค่ min/max ไม่แตะ enable → ไม่ยุ่งกับ depositPaymentTypes (คงค่าเดิมจาก GET)
     }
 
     if (!changed.length) return { changed: [], note: 'ไม่มีอะไรเปลี่ยน' };
@@ -457,7 +465,7 @@ if (PROXY_URL) {
 } else {
   log('⚠️ ยังไม่ได้ตั้ง PROXY_URL — บอทจะต่อหลังบ้านตรง ๆ (อาจโดนบล็อก IP)');
 }
-log('🤖 K36 บอทหลังบ้าน v0.3 เริ่มทำงาน (แก้ช่องทางได้)');
+log('🤖 K36 บอทหลังบ้าน v0.3.1 เริ่มทำงาน (แก้ช่องทางได้)');
 loop();
 setInterval(loop, LOOP_MS);
 
